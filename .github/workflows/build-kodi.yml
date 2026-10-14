@@ -73,7 +73,7 @@ jobs:
 
       - name: Workflow revision marker
         run: |
-          echo "WORKFLOW_REV=2026-10-14-adaptive-icon-v4"
+          echo "WORKFLOW_REV=2026-10-15-adaptive-icon-v5"
 
       - name: Diagnostic preflight
         if: github.event.inputs.debug_mode == 'true'
@@ -457,7 +457,9 @@ jobs:
           # 1) iconos legacy en mipmap-* y drawable-*
           while IFS= read -r f; do
             dir=$(basename "$(dirname "$f")"); s=96
-            for k in "${!SZ[@]}"; do [[ "$dir" == *"-$k"* ]] && s=${SZ[$k]}; done
+            for k in "${!SZ[@]}"; do
+              if [[ "$dir" == *"-$k"* ]]; then s=${SZ[$k]}; fi
+            done
             convert "$ICON" -resize ${s}x${s} "$f"; echo "legacy: $f (${s}px)"
           done < <(find "$ROOT" -type f \( -name ic_launcher.png -o -name ic_launcher_round.png \))
           # 2) icono adaptativo: foreground = tu icono dentro de la zona segura
@@ -473,7 +475,7 @@ jobs:
             echo "adaptive background: $d/ic_launcher_background.xml"
           done < <(find "$ROOT" -type f -name 'ic_launcher_background.*' -path '*drawable*')
           # quitar monochrome (si no, los iconos temáticos muestran el logo de Kodi)
-          grep -rl '<adaptive-icon' "$ROOT" --include=*.xml 2>/dev/null | xargs -r sed -i '/<monochrome/d'
+          { grep -rl '<adaptive-icon' "$ROOT" --include=*.xml 2>/dev/null || true; } | xargs -r sed -i '/<monochrome/d'
           find "$ROOT" -type f -name 'ic_monochrome_foreground.*' -path '*drawable*' -print -delete
           # banner de Android TV
           while IFS= read -r f; do
