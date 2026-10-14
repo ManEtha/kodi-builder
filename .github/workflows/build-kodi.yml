@@ -320,11 +320,12 @@ jobs:
             xargs sed -i "s|>Kodi<|>$APP<|g; s|\"Kodi\"|\"$APP\"|g" 2>/dev/null || true
 
       - name: Apply custom package ID
-        if: github.event.inputs.package_id != 'org.xbmc.kodi'
         run: |
           PKG="${{ github.event.inputs.package_id }}"
           echo "📦 Setting package ID: $PKG"
           find ~/kodi/tools/android/packaging -type f | \
+            xargs sed -i "s|org\.xbmc\.kodi|$PKG|g" 2>/dev/null || true
+          find ~/kodi -type f -name "build.gradle" -o -name "AndroidManifest.xml" | \
             xargs sed -i "s|org\.xbmc\.kodi|$PKG|g" 2>/dev/null || true
 
       - name: Apply custom icon
@@ -575,7 +576,6 @@ jobs:
 
           if [ -f cmake/modules/FindLibZip.cmake ]; then
             echo "Patching FindLibZip.cmake to avoid hard GnuTLS dependency..."
-            # Parche seguro adaptado para omitir GnuTLS de manera definitiva
             sed -i 's/find_package(GnuTLS.*)/# find_package(GnuTLS)/g' cmake/modules/FindLibZip.cmake
             sed -i 's/GnuTLS::GnuTLS//g' cmake/modules/FindLibZip.cmake
             sed -i '/set(CMAKE_ARGS -DBUILD_DOC=OFF/a\                 -DENABLE_GNUTLS=OFF\n                 -DENABLE_OPENSSL=ON\n                 -DENABLE_MBEDTLS=OFF\n                 -DENABLE_WINDOWS_CRYPTO=OFF\n                 -DENABLE_COMMONCRYPTO=OFF' cmake/modules/FindLibZip.cmake || true
