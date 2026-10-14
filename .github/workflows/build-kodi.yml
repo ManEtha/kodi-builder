@@ -73,7 +73,7 @@ jobs:
 
       - name: Workflow revision marker
         run: |
-          echo "WORKFLOW_REV=2026-05-04-keystore-failsafe-v2"
+          echo "WORKFLOW_REV=2026-10-14-branding-verified-v3"
 
       - name: Diagnostic preflight
         if: github.event.inputs.debug_mode == 'true'
@@ -94,6 +94,23 @@ jobs:
           cargo --version || true
           echo "=== Environment snapshot ==="
           env | sort | grep -E '^(ANDROID|JAVA|GITHUB|RUNNER|HOME|PATH)=' || true
+
+      - name: Validate branding inputs
+        env:
+          APP_NAME: ${{ github.event.inputs.app_name }}
+          APP_PKG: ${{ github.event.inputs.package_id }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$APP_PKG" =~ ^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$ ]]; then
+            echo "❌ package_id inválido: '$APP_PKG' (ej: com.miempresa.miapp)" >&2
+            exit 1
+          fi
+          if [ -z "$APP_NAME" ]; then
+            echo "❌ app_name vacío" >&2
+            exit 1
+          fi
+          echo "App name : $APP_NAME"
+          echo "Package  : $APP_PKG"
 
       - name: Parse ABI selection
         id: abi
@@ -311,22 +328,90 @@ jobs:
           fi
           grep -n "CopyUserDataIfNeeded\|Util.h" "$PLATFORM_CPP" || true
 
-      - name: Apply custom app name
-        if: github.event.inputs.app_name != 'Kodi'
+      # ------------------------------------------------------------------
+      # BRANDING: nombre de app + package ID
+      # Kodi NO tiene "org.xbmc.kodi" literal en las plantillas del
+      # empaquetado: lo genera CMake desde APP_PACKAGE (@APP_PACKAGE@) y el
+      # código nativo lo usa para localizar las clases JNI. Por eso se parchea
+      # el árbol fuente ANTES de generar con CMake y se vuelve a pasar sobre
+      # los ficheros generados. Al final se verifica el APK con aapt2.
+      # ------------------------------------------------------------------
+      - name: Apply custom app name and package ID (source tree)
+        env:
+          APP_NAME: ${{ github.event.inputs.app_name }}
+          APP_PKG: ${{ github.event.inputs.package_id }}
         run: |
-          APP="${{ github.event.inputs.app_name }}"
-          echo "🎨 Renaming app to: $APP"
-          find ~/kodi/tools/android/packaging -type f -name "*.xml" -o -name "*.gradle" | \
-            xargs sed -i "s|>Kodi<|>$APP<|g; s|\"Kodi\"|\"$APP\"|g" 2>/dev/null || true
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/branding.py" <<'PY'
+          import os, re, sys
+          from pathlib import Path
+          from xml.sax.saxutils import escape
 
-      - name: Apply custom package ID
-        run: |
-          PKG="${{ github.event.inputs.package_id }}"
-          echo "📦 Setting package ID: $PKG"
-          find ~/kodi/tools/android/packaging -type f | \
-            xargs sed -i "s|org\.xbmc\.kodi|$PKG|g" 2>/dev/null || true
-          find ~/kodi -type f -name "build.gradle" -o -name "AndroidManifest.xml" | \
-            xargs sed -i "s|org\.xbmc\.kodi|$PKG|g" 2>/dev/null || true
+          root = Path(sys.argv[1])
+          mode = sys.argv[2]
+          name = escape(os.environ["APP_NAME"])
+          pkg = os.environ["APP_PKG"]
+          OLD, OLD_P = "org.xbmc.kodi", "org/xbmc/kodi"
+          NEW_P = pkg.replace(".", "/")
+          EXT = {".cmake", ".txt", ".in", ".xml", ".gradle", ".java", ".kt",
+                 ".cpp", ".h", ".properties", ".json", ".kts"}
+          SKIP = {".git", "depends", "docs", "project", "addons", "userdata"}
+          changed = 0
+
+          def walk(base):
+              for dp, dn, fn in os.walk(base):
+                  dn[:] = [d for d in dn if d not in SKIP]
+                  for f in fn:
+                      p = Path(dp) / f
+                      if p.suffix in EXT or f in ("CMakeLists.txt", "version.txt"):
+                          yield p
+
+          def patch(p):
+              global changed
+              try:
+                  s = p.read_text(encoding="utf-8")
+              except Exception:
+                  return
+              o = s
+              if pkg != OLD:
+                  s = s.replace(OLD, pkg).replace(OLD_P, NEW_P)
+              if p.suffix == ".cmake" or p.name == "CMakeLists.txt":
+                  s = re.sub(r'set\(\s*APP_PACKAGE\s+[^)]*\)',
+                             lambda m: 'set(APP_PACKAGE "%s")' % pkg, s)
+              if p.name == "version.txt":
+                  s = re.sub(r'(?m)^APP_PACKAGE\s+.*$',
+                             lambda m: 'APP_PACKAGE %s' % pkg, s)
+              if "android" in str(p).lower():
+                  s = re.sub(r'(<string\s+name="app_name"[^>]*>)[^<]*(</string>)',
+                             lambda m: m.group(1) + name + m.group(2), s)
+                  s = re.sub(r'android:label="(?:@APP_NAME@|Kodi)"',
+                             lambda m: 'android:label="%s"' % name, s)
+              if s != o:
+                  p.write_text(s, encoding="utf-8")
+                  changed += 1
+                  print("patched:", p)
+
+          for p in list(walk(root)):
+              patch(p)
+
+          # Directorios Java org/xbmc/kodi -> nuevo package
+          if pkg != OLD:
+              cands = [d for d in root.rglob("kodi")
+                       if d.is_dir() and str(d).endswith(OLD_P) and "/.git/" not in str(d)]
+              for d in sorted(cands, key=lambda x: -len(str(x))):
+                  dest = Path(str(d)[:-len(OLD_P)]) / NEW_P
+                  if dest.exists():
+                      continue
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  d.rename(dest)
+                  print("moved dir:", d, "->", dest)
+
+          print("✅ %d ficheros modificados (%s)" % (changed, mode))
+          PY
+          python3 "$RUNNER_TEMP/branding.py" "$HOME/kodi" source
+          echo "BRANDING_SCRIPT=$RUNNER_TEMP/branding.py" >> "$GITHUB_ENV"
+          echo "--- Definiciones de APP_PACKAGE tras el parche ---"
+          grep -rn "APP_PACKAGE" "$HOME/kodi/cmake" "$HOME/kodi/CMakeLists.txt" "$HOME/kodi/version.txt" 2>/dev/null | head -30 || true
 
       - name: Apply custom icon
         run: |
@@ -559,6 +644,8 @@ jobs:
           fi
 
       - name: Generate CMake build files via cmakebuildsys
+        env:
+          APP_PKG: ${{ github.event.inputs.package_id }}
         run: |
           set -euo pipefail
           BUILD_DIR=$HOME/kodi-build
@@ -582,6 +669,7 @@ jobs:
           fi
 
           KODI_CMAKE_ARGS="-DCMAKE_BUILD_TYPE=Release"
+          KODI_CMAKE_ARGS="$KODI_CMAKE_ARGS -DAPP_PACKAGE=$APP_PKG"
           KODI_CMAKE_ARGS="$KODI_CMAKE_ARGS -DENABLE_OPTICAL=OFF"
           KODI_CMAKE_ARGS="$KODI_CMAKE_ARGS -DENABLE_MICROHTTPD=OFF"
           KODI_CMAKE_ARGS="$KODI_CMAKE_ARGS -DENABLE_UPNP=OFF"
@@ -613,6 +701,31 @@ jobs:
             exit 1
           fi
           echo "✅ CMake build files generated in $BUILD_DIR"
+
+      - name: Verify branding in generated build files
+        env:
+          APP_NAME: ${{ github.event.inputs.app_name }}
+          APP_PKG: ${{ github.event.inputs.package_id }}
+        run: |
+          set -euo pipefail
+          PK="$HOME/kodi-build/tools/android/packaging"
+          if [ ! -d "$PK" ]; then
+            echo "⚠️ $PK no existe todavía; se verificará sobre el APK final"
+            exit 0
+          fi
+          python3 "$BRANDING_SCRIPT" "$PK" build
+          echo "--- package / applicationId / namespace generados ---"
+          grep -rn "package=\|applicationId\|namespace" "$PK" \
+            --include=AndroidManifest.xml --include="build.gradle*" | head -20 || true
+          echo "--- app_name generado ---"
+          grep -rn 'name="app_name"' "$PK" --include=strings.xml | head -10 || true
+          if [ "$APP_PKG" != "org.xbmc.kodi" ] && \
+             grep -rq "org.xbmc.kodi" "$PK" --include=AndroidManifest.xml --include="build.gradle*"; then
+            echo "❌ El package original sigue presente en los ficheros generados" >&2
+            grep -rn "org.xbmc.kodi" "$PK" --include=AndroidManifest.xml --include="build.gradle*" | head -20 || true
+            exit 1
+          fi
+          echo "✅ Branding correcto en los ficheros generados"
 
       - name: Create signing keystore
         run: |
@@ -653,6 +766,9 @@ jobs:
           echo "✅ Kodi compiled"
 
       - name: Inject custom config into APK assets and package
+        env:
+          APP_NAME: ${{ github.event.inputs.app_name }}
+          APP_PKG: ${{ github.event.inputs.package_id }}
         run: |
           set -euo pipefail
           BUILD_DIR=$HOME/kodi-build
@@ -680,6 +796,11 @@ jobs:
             [ -f "$GUI_SRC" ] && cp "$GUI_SRC" "$SHARE_DIR/userdata/guisettings.xml"
           fi
 
+          # Reaplicar branding sobre lo generado justo antes de empaquetar
+          if [ -d "$PACKAGING_DIR" ]; then
+            python3 "$BRANDING_SCRIPT" "$PACKAGING_DIR" build
+          fi
+
           cd "$KODI_SRC"
           make -C "$BUILD_DIR" apk 2>&1 | tee ~/apk-package.log
 
@@ -695,18 +816,33 @@ jobs:
             ANDROID_HOME="$ANDROID_SDK_ROOT" ./gradlew assembleDebug 2>&1 | tee -a ~/apk-package.log || true
           fi
 
-      - name: Locate built APK
+      - name: Locate and verify built APK
         id: locate
+        env:
+          APP_NAME: ${{ github.event.inputs.app_name }}
+          APP_PKG: ${{ github.event.inputs.package_id }}
         run: |
-          APK=$(find ~ -name "*.apk" 2>/dev/null \
-            | grep -v ".gradle" \
-            | grep -v "/tmp/" \
-            | grep -v "aligned" \
-            | head -1)
+          set -euo pipefail
+          # APK más reciente generado en el directorio de build (no uno cualquiera de ~)
+          APK=$(find "$HOME/kodi-build" -name "*.apk" -not -path "*/.gradle/*" \
+                  -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
           if [ -z "$APK" ]; then
             echo "❌ No APK found."
             exit 1
           fi
+          echo "APK: $APK"
+          AAPT2="$ANDROID_HOME/build-tools/${{ steps.kodi.outputs.android_build_tools }}/aapt2"
+          INFO=$("$AAPT2" dump badging "$APK" | grep -E "^package:|^application-label:" || true)
+          echo "$INFO"
+          if ! echo "$INFO" | grep -q "name='$APP_PKG'"; then
+            echo "❌ El package del APK no coincide con '$APP_PKG'" >&2
+            exit 1
+          fi
+          if ! echo "$INFO" | grep -q "^application-label:'$APP_NAME'"; then
+            echo "❌ El nombre del APK no coincide con '$APP_NAME'" >&2
+            exit 1
+          fi
+          echo "✅ APK verificado: $APP_NAME / $APP_PKG"
           echo "apk_path=$APK" >> $GITHUB_OUTPUT
 
       - name: Sign and zipalign APK
