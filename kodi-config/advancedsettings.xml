@@ -1,33 +1,40 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
-  advancedsettings.xml
-  Baked into the APK at build time — applies to all users on first launch.
+<advancedsettings version="1">
 
-  Full reference: https://kodi.wiki/view/Advancedsettings.xml
-  Edit this file in GitHub, then trigger a new build.
--->
-<advancedsettings>
+  <!-- Rendimiento gráfico -->
+  <gui>
+    <!-- Usa front-to-back rendering para skins pesados -->
+    <fronttobackrendering>true</fronttobackrendering>
 
-  <!-- Log level: 0=quiet, 1=normal, 2=debug -->
-  <loglevel>0</loglevel>
+    <!-- Reduce la cantidad de texturas en memoria RAM -->
+    <memorylimit>150</memorylimit> <!-- en MB; sube a 300 si tienes >4GB RAM. Déjalo en 150 para 2GB de RAM-->
+    
+    <!-- Desactiva precarga de fanarts grandes -->
+    <nofanart>false</nofanart>
+    <fanartres>1080</fanartres> <!-- limita resolución de fanarts -->
+  </gui>
 
-  <!-- Increase buffer for smoother network streaming -->
-  <cache>
-    <buffermode>1</buffermode>           <!-- 0=buffer all, 1=buffer true internet streams -->
-    <memorysize>139460608</memorysize>   <!-- 133 MB buffer -->
-    <readfactor>4</readfactor>           <!-- Read ahead multiplier -->
-  </cache>
+  <!-- Optimización del texture cache para aliviar la RAM -->
+  <images>
+    <!-- Controla el tamaño máximo de imágenes en RAM -->
+    <imageres>1080</imageres> <!-- fanarts y posters a 1080p -->
+    <fanartheight>1080</fanartheight>
+    <thumbsize>512</thumbsize> <!-- reduce thumbs para listas largas -->
+  </images>
 
-  <!-- Video player tweaks -->
-  <videoplayer>
-    <adjustrefreshrate>2</adjustrefreshrate>  <!-- Always match refresh rate to content -->
-    <synctype>1</synctype>
-  </videoplayer>
+  <!-- Base de datos -->
+  <videolibrary>
+    <!-- Evita rescaneos innecesarios en librerías grandes. Acelera actualizaciones en bases de datos grandes. -->
+    <usefasthash>true</usefasthash>
+  </videolibrary>
 
-  <!-- Skip unwanted video extensions -->
-  <videoextensions>
-    <remove>.nfo</remove>
-    <remove>.jpg</remove>
-  </videoextensions>
+  <!-- Logging -->
+  <loglevel>1</loglevel> <!-- 0=none, 1=normal, 2=debug -->
 
+  <!-- Red -->
+  <network>
+        <disablehttp2>true</disablehttp2> <!-- Deshabilita HTTP2 en servidores/curl rotos -->
+        <curlclienttimeout>15</curlclienttimeout> <!-- Da algo mas de margen antes de dar la conexión por muerta -->
+        <curllowspeedtime>10</curllowspeedtime> <!-- Cuánto tiempo tolera una conexión "lenta" antes de considerarla fallida -->
+        <curlretries>3</curlretries> <!-- Por defecto es 2; subirlo a 3 da un intento extra antes de escalar a fallo real -->
+    </network>
 </advancedsettings>
