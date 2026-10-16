@@ -53,12 +53,11 @@ def main() -> int:
     )
     check(
         "workflow",
-        "Piers resolves to rolling master and Android 37.0",
+        "Piers resolves to the latest Piers tag and Android 37.0",
         bool(
             re.search(
-                r"Piers\).*?SOURCE_REF=master.*?ADDON_CHANNEL=piers"
-                r".*?ANDROID_PLATFORM=37\.0.*?ANDROID_BUILD_TOOLS=37\.0\.0"
-                r".*?IS_PRERELEASE=true",
+                r"Piers\).*?TAG_SUFFIX=Piers.*?ADDON_CHANNEL=piers"
+                r".*?ANDROID_PLATFORM=37\.0.*?ANDROID_BUILD_TOOLS=37\.0\.0",
                 workflow,
                 re.DOTALL,
             )
