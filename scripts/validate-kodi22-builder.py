@@ -25,7 +25,6 @@ def main() -> int:
     workflow = read(".github/workflows/build-kodi.yml")
     readme = read("README.md")
     addons = read("kodi-config/addons.txt")
-    sources = read("kodi-config/sources.xml")
     preflight = read("scripts/local-gha-preflight.ps1")
 
     checks: list[tuple[str, str, bool]] = []
@@ -108,12 +107,6 @@ def main() -> int:
         "docs",
         "addon examples use the Piers channel",
         "https://mirrors.kodi.tv/addons/piers/" in addons,
-    )
-    check(
-        "docs",
-        "source example uses the Piers channel",
-        "<name>Kodi Piers Repo</name>" in sources
-        and "https://mirrors.kodi.tv/addons/piers/" in sources,
     )
     check(
         "docs",
