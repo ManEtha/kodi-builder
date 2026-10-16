@@ -6,7 +6,7 @@
 > If you find issues, please fork this repository and fix them in your fork.
 
 > **Kodi 22 status**
-> `Piers` follows Kodi's moving `master` branch and is not a final release yet. Builds can change or temporarily break when upstream changes. Select `Omega` for the current stable Kodi 21 branch.
+> `Piers` builds the latest tag published for Kodi 22 in `xbmc/xbmc` (alpha, beta, RC or final, whichever is newest) and is a prerelease until the final 22.0 is published. Select `Omega` for the current stable Kodi 21 release.
 
 ### Build a custom Kodi APK entirely in your browser — no software to install
 
@@ -29,7 +29,7 @@ In your fork, click the **Actions** tab → click **"I understand my workflows, 
 
 | Field | What to put |
 |-------|-------------|
-| Kodi version | `Piers` — rolling Kodi 22 prerelease (default) |
+| Kodi version | `Piers` — latest Kodi 22 tag, prerelease until 22.0 final (default) |
 | Target device | `arm64-v8a` — works on most modern Android devices |
 | App display name | Leave as `Kodi` or type your custom name (shown under the launcher icon) |
 | Package ID | Leave as `org.xbmc.kodi` unless you want both official + custom installed |
@@ -133,7 +133,7 @@ Edit `kodi-config/sources.xml` and add entries to the `<files>` section. The fil
 Yes — choose `armeabi-v7a` in the build form for 32-bit older devices.
 
 **How do I update to a newer Kodi version?**
-Trigger a new build and select the release you want. `Piers` follows the current Kodi 22 `master` branch, so later runs automatically pick up upstream prerelease changes. Omega, Nexus, and Matrix remain available for older builds.
+Trigger a new build and select the release you want. Each run resolves the newest published tag of the release you select (for example `22.0rc1-Piers`, later `22.0-Piers`; `21.3-Omega` for Omega), so new Kodi releases are picked up automatically. Omega, Nexus, and Matrix remain available for older builds.
 
 ---
 
