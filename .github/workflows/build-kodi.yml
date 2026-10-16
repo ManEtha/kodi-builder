@@ -138,38 +138,63 @@ jobs:
           RELEASE="${{ github.event.inputs.branch }}"
           case "$RELEASE" in
             Piers)
-              SOURCE_REF=master
+              TAG_SUFFIX=Piers
               ADDON_CHANNEL=piers
               ANDROID_PLATFORM=37.0
               ANDROID_BUILD_TOOLS=37.0.0
-              IS_PRERELEASE=true
               ;;
             Omega)
-              SOURCE_REF=Omega
+              TAG_SUFFIX=Omega
               ADDON_CHANNEL=omega
               ANDROID_PLATFORM=34
               ANDROID_BUILD_TOOLS=34.0.0
-              IS_PRERELEASE=false
               ;;
             Nexus)
-              SOURCE_REF=Nexus
+              TAG_SUFFIX=Nexus
               ADDON_CHANNEL=nexus
               ANDROID_PLATFORM=34
               ANDROID_BUILD_TOOLS=34.0.0
-              IS_PRERELEASE=false
               ;;
             Matrix)
-              SOURCE_REF=Matrix
+              TAG_SUFFIX=Matrix
               ADDON_CHANNEL=matrix
               ANDROID_PLATFORM=34
               ANDROID_BUILD_TOOLS=34.0.0
-              IS_PRERELEASE=false
               ;;
             *)
               echo "Unsupported Kodi release: $RELEASE" >&2
               exit 1
               ;;
           esac
+
+          # Ultimo tag publicado de esa rama (alpha < beta < rc < final)
+          SOURCE_REF=$(git ls-remote --tags --refs https://github.com/xbmc/xbmc \
+            | awk '{sub("refs/tags/","",$2); print $2}' \
+            | python3 -c '
+          import re, sys
+          suffix = sys.argv[1]
+          rank = {"a": 0, "b": 1, "rc": 2, None: 3}
+          best = None
+          for t in sys.stdin.read().split():
+              m = re.fullmatch(r"(\d+)\.(\d+)(?:\.(\d+))?(a|b|rc)?(\d+)?-" + suffix, t)
+              if not m:
+                  continue
+              maj, mi, pa, st, n = m.groups()
+              key = (int(maj), int(mi), int(pa or 0), rank[st], int(n or 0))
+              if best is None or key > best[0]:
+                  best = (key, t)
+          print(best[1] if best else "")
+          ' "$TAG_SUFFIX")
+
+          if [ -z "$SOURCE_REF" ]; then
+            echo "No se encontro ningun tag *-$TAG_SUFFIX en xbmc/xbmc" >&2
+            exit 1
+          fi
+          if [[ "$SOURCE_REF" =~ [0-9](a|b|rc)[0-9]+- ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
           {
             echo "release=$RELEASE"
             echo "source_ref=$SOURCE_REF"
@@ -240,10 +265,9 @@ jobs:
           SOURCE_REF="${{ steps.kodi.outputs.source_ref }}"
           if [ -d ~/kodi/.git ]; then
             echo "📦 Updating existing source..."
-            git -C ~/kodi fetch origin "$SOURCE_REF"
-            git -C ~/kodi checkout "$SOURCE_REF"
-            git -C ~/kodi reset --hard "origin/$SOURCE_REF"
-            git -C ~/kodi clean -fd
+            git -C ~/kodi fetch --depth=1 origin "$SOURCE_REF"
+            git -C ~/kodi checkout -f FETCH_HEAD
+            git -C ~/kodi clean -fdx
           else
             echo "📦 Cloning Kodi $SOURCE_REF..."
             git clone --depth=1 \
