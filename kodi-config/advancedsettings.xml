@@ -7,7 +7,7 @@
 
     <!-- Reduce la cantidad de texturas en memoria RAM -->
     <memorylimit>150</memorylimit> <!-- en MB; sube a 300 si tienes >4GB RAM. Déjalo en 150 para 2GB de RAM-->
-    
+
     <!-- Desactiva precarga de fanarts grandes -->
     <nofanart>false</nofanart>
     <fanartres>1080</fanartres> <!-- limita resolución de fanarts -->
@@ -28,13 +28,24 @@
   </videolibrary>
 
   <!-- Logging -->
-  <loglevel>1</loglevel> <!-- 0=none, 1=normal, 2=debug -->
+  <!-- Corregido: 0 = normal, 1 = debug, 2 = (sin uso práctico). Con 1 el log se llena de líneas "debug".
+       Pon 1 solo mientras depuras. -->
+  <loglevel>0</loglevel>
 
   <!-- Red -->
   <network>
-        <disablehttp2>true</disablehttp2> <!-- Deshabilita HTTP2 en servidores/curl rotos -->
-        <curlclienttimeout>15</curlclienttimeout> <!-- Da algo mas de margen antes de dar la conexión por muerta -->
-        <curllowspeedtime>10</curllowspeedtime> <!-- Cuánto tiempo tolera una conexión "lenta" antes de considerarla fallida -->
-        <curlretries>3</curlretries> <!-- Por defecto es 2; subirlo a 3 da un intento extra antes de escalar a fallo real -->
-    </network>
+    <disablehttp2>true</disablehttp2> <!-- Deshabilita HTTP2 en servidores/curl rotos -->
+
+    <!-- Tiempo máximo para establecer la conexión. -->
+    <curlclienttimeout>10</curlclienttimeout>
+
+    <!-- Segundos con velocidad ~0 antes de abortar. Es el que fijaba los 10 s de cada intento
+         del HEAD (CCurlFile::Stat) que no respondía el servidor. -->
+    <curllowspeedtime>5</curllowspeedtime>
+
+    <!-- Reintentos tras un fallo transitorio. Con 3 (4 intentos) la espera máxima era 4 x 10 s = 40 s;
+         con 1 (2 intentos) y lowspeed 5 queda en 2 x 5 s = 10 s.
+         Si ves cortes en redes inestables, sube a 2. -->
+    <curlretries>1</curlretries>
+  </network>
 </advancedsettings>
